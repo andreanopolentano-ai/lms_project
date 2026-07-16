@@ -8,6 +8,8 @@ from materials.models import Course, Lesson
 class LessonSerializer(serializers.ModelSerializer):
     """Сериализатор урока."""
 
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = Lesson
         fields = (
@@ -17,6 +19,7 @@ class LessonSerializer(serializers.ModelSerializer):
             "description",
             "preview",
             "video_url",
+            "owner",
         )
 
 
@@ -25,6 +28,7 @@ class CourseSerializer(serializers.ModelSerializer):
 
     lessons_count = serializers.SerializerMethodField()
     lessons = LessonSerializer(many=True, read_only=True)
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = Course
@@ -33,6 +37,7 @@ class CourseSerializer(serializers.ModelSerializer):
             "title",
             "preview",
             "description",
+            "owner",
             "lessons_count",
             "lessons",
         )

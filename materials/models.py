@@ -1,5 +1,6 @@
 """Модели приложения materials."""
 
+from django.conf import settings
 from django.db import models
 
 
@@ -20,6 +21,14 @@ class Course(models.Model):
         blank=True,
         null=True,
         verbose_name="Описание",
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="owned_courses",
+        blank=True,
+        null=True,
+        verbose_name="Владелец",
     )
 
     class Meta:
@@ -60,6 +69,14 @@ class Lesson(models.Model):
         blank=True,
         null=True,
         verbose_name="Ссылка на видео",
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="owned_lessons",
+        blank=True,
+        null=True,
+        verbose_name="Владелец",
     )
 
     class Meta:
