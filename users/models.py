@@ -1,5 +1,6 @@
 """Модели приложения users."""
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from django.utils import timezone
@@ -40,7 +41,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         upload_to="users/avatars/",
         blank=True,
         null=True,
-        verbose_name="Аватарка",
+        verbose_name="Аватар",
     )
     is_active = models.BooleanField(
         default=True,
@@ -67,3 +68,59 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self) -> str:
         """Возвращает строковое представление пользователя."""
         return self.email
+
+
+class Payment(models.Model):
+    """Модель платежа пользователя за курс или отдельный урок."""
+
+    class PaymentMethod(models.TextChoices):
+        """Доступные способы оплаты."""
+
+        CASH = "cash", "Наличные"
+        TRANSFER = "transfer", "Перевод на счет"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="payments",
+        verbose_name="Пользователь",
+    )
+    payment_date = models.DateTimeField(
+        default=timezone.now,
+        verbose_name="Дата оплаты",
+    )
+    paid_course = models.ForeignKey(
+        "materials.Course",
+        on_delete=models.SET_NULL,
+        related_name="payments",
+        blank=True,
+        null=True,
+        verbose_name="Оплаченный курс",
+    )
+    paid_lesson = models.ForeignKey(
+        "materials.Lesson",
+        on_delete=models.SET_NULL,
+        related_name="payments",
+        blank=True,
+        null=True,
+        verbose_name="Оплаченный урок",
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Сумма оплаты",
+    )
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PaymentMethod.choices,
+        verbose_name="Способ оплаты",
+    )
+
+    class Meta:
+        verbose_name = "платеж"
+        verbose_name_plural = "платежи"
+        ordering = ("-payment_date",)
+
+    def __str__(self) -> str:
+        """Возвращает строковое представление платежа."""
+        return f"{self.user.email} — {self.amount} руб."
