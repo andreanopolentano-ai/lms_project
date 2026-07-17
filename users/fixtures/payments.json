@@ -1,0 +1,66 @@
+[
+  {
+    "model": "users.user",
+    "pk": 1001,
+    "fields": {
+      "password": "!",
+      "last_login": null,
+      "is_superuser": false,
+      "email": "fixture_user@example.com",
+      "first_name": "Иван",
+      "last_name": "Иванов",
+      "phone": "+79990000000",
+      "city": "Москва",
+      "avatar": "",
+      "is_active": true,
+      "is_staff": false,
+      "date_joined": "2026-07-16T12:00:00Z",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "materials.course",
+    "pk": 1001,
+    "fields": {
+      "title": "Python для начинающих",
+      "preview": "",
+      "description": "Тестовый курс, добавленный через фикстуру"
+    }
+  },
+  {
+    "model": "materials.lesson",
+    "pk": 1001,
+    "fields": {
+      "course": 1001,
+      "title": "Введение в Python",
+      "description": "Тестовый урок, добавленный через фикстуру",
+      "preview": "",
+      "video_url": "https://example.com/video/python-intro"
+    }
+  },
+  {
+    "model": "users.payment",
+    "pk": 1001,
+    "fields": {
+      "user": 1001,
+      "payment_date": "2026-07-16T13:00:00Z",
+      "paid_course": 1001,
+      "paid_lesson": null,
+      "amount": "15000.00",
+      "payment_method": "transfer"
+    }
+  },
+  {
+    "model": "users.payment",
+    "pk": 1002,
+    "fields": {
+      "user": 1001,
+      "payment_date": "2026-07-17T13:00:00Z",
+      "paid_course": null,
+      "paid_lesson": 1001,
+      "amount": "1500.00",
+      "payment_method": "cash"
+    }
+  }
+]

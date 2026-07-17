@@ -1,0 +1,31 @@
+[
+  {
+    "model": "auth.group",
+    "pk": 1001,
+    "fields": {
+      "name": "Модераторы",
+      "permissions": [
+        [
+          "view_course",
+          "materials",
+          "course"
+        ],
+        [
+          "change_course",
+          "materials",
+          "course"
+        ],
+        [
+          "view_lesson",
+          "materials",
+          "lesson"
+        ],
+        [
+          "change_lesson",
+          "materials",
+          "lesson"
+        ]
+      ]
+    }
+  }
+]
