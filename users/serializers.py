@@ -4,8 +4,9 @@ from django.contrib.auth.password_validation import validate_password
 from django.db import IntegrityError, transaction
 from rest_framework import serializers
 
+from materials.models import Course
 from materials.serializers import CourseSerializer, LessonSerializer
-from users.models import Payment, User
+from users.models import Payment, Subscription, User
 
 
 class PaymentSerializer(serializers.ModelSerializer):
@@ -26,6 +27,12 @@ class PaymentSerializer(serializers.ModelSerializer):
             "payment_method",
         )
 
+class SubscriptionToggleSerializer(serializers.Serializer):
+    """Проверяет данные для добавления или удаления подписки."""
+
+    course = serializers.PrimaryKeyRelatedField(
+        queryset=Course.objects.all(),
+    )
 
 class RegisterSerializer(serializers.ModelSerializer):
     """Сериализатор регистрации пользователя."""

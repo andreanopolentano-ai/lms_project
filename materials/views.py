@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ModelViewSet
 
 from materials.models import Course, Lesson
+from materials.paginators import CourseLessonPagination
 from materials.permissions import (
     IsModeratorOrOwner,
     IsNotModerator,
@@ -18,16 +19,20 @@ from materials.serializers import CourseSerializer, LessonSerializer
 
 
 class CourseViewSet(ModelViewSet):
-    """CRUD для курсов с разграничением прав доступа."""
+    """CRUD курсов с разграничением прав доступа."""
 
     queryset = Course.objects.all()
     serializer_class = CourseSerializer
+    pagination_class = CourseLessonPagination
 
     def get_queryset(self):
-        """Возвращает все курсы модератору и только свои обычному пользователю."""
+        """Возвращает модератору все курсы, пользователю — только его курсы."""
 
-        queryset = Course.objects.select_related("owner").prefetch_related(
+        queryset = Course.objects.select_related(
+            "owner",
+        ).prefetch_related(
             "lessons",
+            "subscriptions",
         )
 
         if user_is_moderator(self.request.user):
@@ -36,19 +41,21 @@ class CourseViewSet(ModelViewSet):
         return queryset.filter(owner=self.request.user)
 
     def get_permissions(self):
-        """Назначает отдельные разрешения для каждого действия."""
+        """Назначает разрешения в зависимости от действия."""
 
         if self.action == "create":
             permission_classes = (
                 IsAuthenticated,
                 IsNotModerator,
             )
+
         elif self.action == "destroy":
             permission_classes = (
                 IsAuthenticated,
                 IsNotModerator,
                 IsOwner,
             )
+
         elif self.action in (
             "retrieve",
             "update",
@@ -58,10 +65,14 @@ class CourseViewSet(ModelViewSet):
                 IsAuthenticated,
                 IsModeratorOrOwner,
             )
+
         else:
             permission_classes = (IsAuthenticated,)
 
-        return [permission() for permission in permission_classes]
+        return [
+            permission()
+            for permission in permission_classes
+        ]
 
     def perform_create(self, serializer):
         """Назначает владельцем курса текущего пользователя."""
@@ -74,9 +85,10 @@ class LessonListCreateAPIView(ListCreateAPIView):
 
     queryset = Lesson.objects.all()
     serializer_class = LessonSerializer
+    pagination_class = CourseLessonPagination
 
     def get_queryset(self):
-        """Возвращает все уроки модератору и только свои обычному пользователю."""
+        """Возвращает модератору все уроки, пользователю — только его уроки."""
 
         queryset = Lesson.objects.select_related(
             "course",
@@ -89,7 +101,7 @@ class LessonListCreateAPIView(ListCreateAPIView):
         return queryset.filter(owner=self.request.user)
 
     def get_permissions(self):
-        """Запрещает модератору создание уроков."""
+        """Запрещает модератору создавать уроки."""
 
         if self.request.method == "POST":
             permission_classes = (
@@ -99,7 +111,10 @@ class LessonListCreateAPIView(ListCreateAPIView):
         else:
             permission_classes = (IsAuthenticated,)
 
-        return [permission() for permission in permission_classes]
+        return [
+            permission()
+            for permission in permission_classes
+        ]
 
     def perform_create(self, serializer):
         """Назначает владельцем урока текущего пользователя."""
@@ -110,13 +125,13 @@ class LessonListCreateAPIView(ListCreateAPIView):
 class LessonRetrieveUpdateDestroyAPIView(
     RetrieveUpdateDestroyAPIView,
 ):
-    """Получение, обновление и удаление одного урока."""
+    """Получение, обновление и удаление отдельного урока."""
 
     queryset = Lesson.objects.all()
     serializer_class = LessonSerializer
 
     def get_queryset(self):
-        """Ограничивает выборку уроками текущего владельца."""
+        """Ограничивает доступ к урокам в зависимости от роли пользователя."""
 
         queryset = Lesson.objects.select_related(
             "course",
@@ -143,4 +158,7 @@ class LessonRetrieveUpdateDestroyAPIView(
                 IsModeratorOrOwner,
             )
 
-        return [permission() for permission in permission_classes]
+        return [
+            permission()
+            for permission in permission_classes
+        ]

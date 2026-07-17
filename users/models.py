@@ -124,3 +124,34 @@ class Payment(models.Model):
     def __str__(self) -> str:
         """Возвращает строковое представление платежа."""
         return f"{self.user.email} — {self.amount} руб."
+
+class Subscription(models.Model):
+    """Подписка пользователя на обновления курса."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="subscriptions",
+        verbose_name="Пользователь",
+    )
+    course = models.ForeignKey(
+        "materials.Course",
+        on_delete=models.CASCADE,
+        related_name="subscriptions",
+        verbose_name="Курс",
+    )
+
+    class Meta:
+        verbose_name = "подписка"
+        verbose_name_plural = "подписки"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "course"),
+                name="unique_user_course_subscription",
+            )
+        ]
+
+    def __str__(self) -> str:
+        """Возвращает строковое представление подписки."""
+
+        return f"{self.user.email} — {self.course.title}"
