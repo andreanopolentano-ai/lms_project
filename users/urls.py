@@ -3,7 +3,11 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from users.views import PaymentListAPIView, UserViewSet
+from users.views import (
+    PaymentListAPIView,
+    SubscriptionToggleAPIView,
+    UserViewSet,
+)
 
 
 app_name = "users"
@@ -34,6 +38,11 @@ urlpatterns = [
         "payments/",
         PaymentListAPIView.as_view(),
         name="payment-list",
+    ),
+    path(
+        "subscriptions/toggle/",
+        SubscriptionToggleAPIView.as_view(),
+        name="subscription-toggle",
     ),
     path("", include(router.urls)),
 ]
