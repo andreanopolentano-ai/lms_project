@@ -10,11 +10,17 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+load_dotenv(BASE_DIR / ".env", override=True)
+
+STRIPE_API_KEY = os.getenv("STRIPE_API_KEY", "")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -41,6 +47,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "django_filters",
+    "drf_spectacular",
 
     "users",
     "materials",
@@ -135,4 +142,38 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
+
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "LMS API",
+    "DESCRIPTION": (
+        "API системы управления курсами, уроками, "
+        "пользователями, подписками и платежами."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "persistAuthorization": True,
+        "displayOperationId": True,
+    },
+}
+
+STRIPE_API_KEY = os.getenv("STRIPE_API_KEY", "")
+STRIPE_CURRENCY = os.getenv("STRIPE_CURRENCY", "rub")
+
+STRIPE_SUCCESS_URL = os.getenv(
+    "STRIPE_SUCCESS_URL",
+    (
+        "http://127.0.0.1:8000/api/docs/"
+        "?session_id={CHECKOUT_SESSION_ID}"
+    ),
+)
+
+STRIPE_CANCEL_URL = os.getenv(
+    "STRIPE_CANCEL_URL",
+    "http://127.0.0.1:8000/api/docs/",
+)
