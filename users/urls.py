@@ -4,7 +4,9 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from users.views import (
+    PaymentCreateAPIView,
     PaymentListAPIView,
+    PaymentStatusAPIView,
     SubscriptionToggleAPIView,
     UserViewSet,
 )
@@ -38,6 +40,16 @@ urlpatterns = [
         "payments/",
         PaymentListAPIView.as_view(),
         name="payment-list",
+    ),
+    path(
+        "payments/create/",
+        PaymentCreateAPIView.as_view(),
+        name="payment-create",
+    ),
+    path(
+        "payments/<int:pk>/status/",
+        PaymentStatusAPIView.as_view(),
+        name="payment-status",
     ),
     path(
         "subscriptions/toggle/",
