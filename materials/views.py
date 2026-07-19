@@ -1,5 +1,10 @@
 """Контроллеры приложения materials."""
 
+from datetime import timedelta
+from functools import partial
+
+from django.db import transaction
+from django.utils import timezone
 from rest_framework.generics import (
     ListCreateAPIView,
     RetrieveUpdateDestroyAPIView,
@@ -19,6 +24,28 @@ from materials.serializers import (
     CourseSerializer,
     LessonSerializer,
 )
+from materials.tasks import send_course_update_notification
+
+
+COURSE_NOTIFICATION_INTERVAL = timedelta(hours=4)
+
+
+def schedule_course_notification(
+    course_id: int,
+    previous_updated_at,
+) -> None:
+    """Ставит уведомление в очередь, если прошло не меньше 4 часов."""
+
+    if timezone.now() - previous_updated_at < COURSE_NOTIFICATION_INTERVAL:
+        return
+
+    transaction.on_commit(
+        partial(
+            send_course_update_notification.delay,
+            course_id,
+        ),
+        robust=True,
+    )
 
 
 class CourseViewSet(ModelViewSet):
@@ -85,6 +112,18 @@ class CourseViewSet(ModelViewSet):
         serializer.save(
             owner=self.request.user,
         )
+
+    def perform_update(self, serializer):
+        """Обновляет курс и ставит уведомление после commit."""
+
+        previous_updated_at = serializer.instance.updated_at
+
+        with transaction.atomic():
+            course = serializer.save()
+            schedule_course_notification(
+                course.pk,
+                previous_updated_at,
+            )
 
 
 class LessonListCreateAPIView(ListCreateAPIView):
@@ -183,3 +222,27 @@ class LessonRetrieveUpdateDestroyAPIView(
             permission()
             for permission in permission_classes
         ]
+
+    def perform_update(self, serializer):
+        """Обновляет урок и дату изменения его курса."""
+
+        target_course = serializer.validated_data.get(
+            "course",
+            serializer.instance.course,
+        )
+        previous_updated_at = target_course.updated_at
+
+        with transaction.atomic():
+            lesson = serializer.save()
+            current_time = timezone.now()
+
+            Course.objects.filter(
+                pk=lesson.course_id,
+            ).update(
+                updated_at=current_time,
+            )
+
+            schedule_course_notification(
+                lesson.course_id,
+                previous_updated_at,
+            )
