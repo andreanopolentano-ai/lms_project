@@ -77,7 +77,8 @@ class Payment(models.Model):
         """Доступные способы оплаты."""
 
         CASH = "cash", "Наличные"
-        TRANSFER = "transfer", "Перевод на счет"
+        TRANSFER = "transfer", "Перевод на счёт"
+        CARD = "card", "Банковская карта"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -115,15 +116,51 @@ class Payment(models.Model):
         choices=PaymentMethod.choices,
         verbose_name="Способ оплаты",
     )
+    stripe_product_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="ID продукта Stripe",
+    )
+    stripe_price_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="ID цены Stripe",
+    )
+    stripe_session_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="ID платёжной сессии Stripe",
+    )
+    payment_url = models.URLField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        verbose_name="Ссылка на оплату",
+    )
+    payment_status = models.CharField(
+        max_length=30,
+        default="unpaid",
+        verbose_name="Статус оплаты Stripe",
+    )
+    session_status = models.CharField(
+        max_length=30,
+        default="open",
+        verbose_name="Статус сессии Stripe",
+    )
 
     class Meta:
-        verbose_name = "платеж"
+        verbose_name = "платёж"
         verbose_name_plural = "платежи"
         ordering = ("-payment_date",)
 
     def __str__(self) -> str:
         """Возвращает строковое представление платежа."""
+
         return f"{self.user.email} — {self.amount} руб."
+
 
 class Subscription(models.Model):
     """Подписка пользователя на обновления курса."""
