@@ -1,16 +1,18 @@
 """Сериализаторы приложения users."""
 
+from decimal import Decimal
+
 from django.contrib.auth.password_validation import validate_password
 from django.db import IntegrityError, transaction
 from rest_framework import serializers
 
 from materials.models import Course
 from materials.serializers import CourseSerializer, LessonSerializer
-from users.models import Payment, Subscription, User
+from users.models import Payment, User
 
 
 class PaymentSerializer(serializers.ModelSerializer):
-    """Сериализатор платежа с вложенными данными."""
+    """Сериализатор платежа с данными Stripe."""
 
     paid_course = CourseSerializer(read_only=True)
     paid_lesson = LessonSerializer(read_only=True)
@@ -25,7 +27,30 @@ class PaymentSerializer(serializers.ModelSerializer):
             "paid_lesson",
             "amount",
             "payment_method",
+            "stripe_product_id",
+            "stripe_price_id",
+            "stripe_session_id",
+            "payment_url",
+            "payment_status",
+            "session_status",
         )
+        read_only_fields = fields
+
+
+class PaymentCreateSerializer(serializers.Serializer):
+    """Входные данные для создания оплаты курса."""
+
+    course = serializers.PrimaryKeyRelatedField(
+        queryset=Course.objects.all(),
+        help_text="Идентификатор оплачиваемого курса.",
+    )
+    amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.50"),
+        help_text="Стоимость курса в рублях.",
+    )
+
 
 class SubscriptionToggleSerializer(serializers.Serializer):
     """Проверяет данные для добавления или удаления подписки."""
@@ -33,6 +58,28 @@ class SubscriptionToggleSerializer(serializers.Serializer):
     course = serializers.PrimaryKeyRelatedField(
         queryset=Course.objects.all(),
     )
+
+
+class SubscriptionToggleResponseSerializer(
+    serializers.Serializer,
+):
+    """Ответ после добавления или удаления подписки."""
+
+    message = serializers.CharField(
+        help_text="Результат изменения подписки.",
+    )
+    is_subscribed = serializers.BooleanField(
+        help_text="Текущее состояние подписки.",
+    )
+
+
+class ErrorResponseSerializer(serializers.Serializer):
+    """Стандартный ответ с описанием ошибки."""
+
+    detail = serializers.CharField(
+        help_text="Описание ошибки.",
+    )
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     """Сериализатор регистрации пользователя."""
@@ -67,7 +114,9 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         email = User.objects.normalize_email(value)
 
-        if User.objects.filter(email__iexact=email).exists():
+        if User.objects.filter(
+            email__iexact=email,
+        ).exists():
             raise serializers.ValidationError(
                 "Пользователь с таким email уже существует."
             )
@@ -80,14 +129,16 @@ class RegisterSerializer(serializers.ModelSerializer):
         if attrs["password"] != attrs["password_confirm"]:
             raise serializers.ValidationError(
                 {
-                    "password_confirm": "Введенные пароли не совпадают."
+                    "password_confirm": (
+                        "Введённые пароли не совпадают."
+                    )
                 }
             )
 
         return attrs
 
     def create(self, validated_data):
-        """Создает пользователя и безопасно хеширует пароль."""
+        """Создаёт пользователя и хеширует пароль."""
 
         validated_data.pop("password_confirm")
         password = validated_data.pop("password")
@@ -100,7 +151,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         except IntegrityError as error:
             raise serializers.ValidationError(
                 {
-                    "email": "Пользователь с таким email уже существует."
+                    "email": (
+                        "Пользователь с таким email "
+                        "уже существует."
+                    )
                 }
             ) from error
 
@@ -123,7 +177,7 @@ class PublicUserSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Полный сериализатор собственного профиля пользователя."""
+    """Полный сериализатор профиля пользователя."""
 
     password = serializers.CharField(
         write_only=True,
@@ -157,13 +211,22 @@ class UserSerializer(serializers.ModelSerializer):
         )
 
     def update(self, instance, validated_data):
-        """Обновляет профиль и корректно хеширует новый пароль."""
+        """Обновляет профиль и хеширует новый пароль."""
 
-        password = validated_data.pop("password", None)
-        instance = super().update(instance, validated_data)
+        password = validated_data.pop(
+            "password",
+            None,
+        )
+
+        instance = super().update(
+            instance,
+            validated_data,
+        )
 
         if password:
             instance.set_password(password)
-            instance.save(update_fields=("password",))
+            instance.save(
+                update_fields=("password",),
+            )
 
         return instance

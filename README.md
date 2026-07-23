@@ -22,3 +22,17 @@ Django REST Framework проект для LMS-системы.
 - `python manage.py makemigrations --check`
 - CRUD курсов проверен через DRF-интерфейс.
 - CRUD уроков проверен через DRF-интерфейс.
+
+## Запуск проекта через Docker Compose
+
+### Требования
+
+- Docker Desktop
+- Docker Compose
+
+### Подготовка переменных окружения
+
+Создайте файл `.env` на основе примера:
+
+```bash
+cp .env.example .env
