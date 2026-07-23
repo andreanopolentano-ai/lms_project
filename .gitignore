@@ -11,3 +11,8 @@ celerybeat-schedule.*
 celerybeat.pid
 
 celerybeat-schedule*
+
+.env
+.env.local.backup
+db.sqlite3
+celerybeat-schedule*
