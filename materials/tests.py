@@ -381,12 +381,11 @@ class MaterialsAPITestCase(APITestCase):
             course=self.course,
         )
 
-        with self.assertRaises(IntegrityError):
-            with transaction.atomic():
-                Subscription.objects.create(
-                    user=self.owner,
-                    course=self.course,
-                )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Subscription.objects.create(
+                user=self.owner,
+                course=self.course,
+            )
 
     def test_course_contains_subscription_status(self):
         """Курс возвращает признак подписки пользователя."""

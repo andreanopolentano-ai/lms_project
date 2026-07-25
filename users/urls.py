@@ -11,7 +11,6 @@ from users.views import (
     UserViewSet,
 )
 
-
 app_name = "users"
 
 router = DefaultRouter()

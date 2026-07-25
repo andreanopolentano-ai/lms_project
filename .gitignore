@@ -11,4 +11,20 @@ celerybeat-schedule.*
 celerybeat.pid
 
 celerybeat-schedule*
+
+.env
 .env.local.backup
+db.sqlite3
+celerybeat-schedule*
+.env
+.env.local.backup
+.venv/
+.idea/
+__pycache__/
+*.py[cod]
+db.sqlite3
+celerybeat-schedule*
+coverage.txt
+htmlcov/
+staticfiles/
+media/

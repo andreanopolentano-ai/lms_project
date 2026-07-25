@@ -26,7 +26,6 @@ from materials.serializers import (
 )
 from materials.tasks import send_course_update_notification
 
-
 COURSE_NOTIFICATION_INTERVAL = timedelta(hours=4)
 
 

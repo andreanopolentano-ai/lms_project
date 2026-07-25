@@ -1,0 +1,212 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - feature/ci-cd-deployment
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: lms_test
+          POSTGRES_USER: lms
+          POSTGRES_PASSWORD: lms_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lms -d lms_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    env:
+      SECRET_KEY: ci-secret-key
+      DEBUG: "False"
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      DB_ENGINE: postgres
+
+      POSTGRES_DB: lms_test
+      POSTGRES_USER: lms
+      POSTGRES_PASSWORD: lms_password
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+
+      DB_NAME: lms_test
+      DB_USER: lms
+      DB_PASSWORD: lms_password
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+
+      CELERY_BROKER_URL: redis://127.0.0.1:6379/0
+      CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/0
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: |
+          poetry config virtualenvs.create false
+          poetry install --with dev --no-interaction --no-root
+
+      - name: Run Django checks
+        run: python manage.py check
+
+      - name: Run tests
+        run: python manage.py test
+
+  lint:
+    name: Lint
+    needs: tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: |
+          poetry config virtualenvs.create false
+          poetry install --with dev --no-interaction --no-root
+
+      - name: Run Ruff
+        run: ruff check . --exclude .venv,.idea,migrations
+
+  build:
+    name: Build
+    needs: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t lms-project:ci .
+
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          printf '%s' "$DOCKERHUB_TOKEN" |
+          docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+      - name: Push Docker image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          docker tag lms-project:ci "$DOCKERHUB_USERNAME/lms-project:latest"
+          docker tag lms-project:ci "$DOCKERHUB_USERNAME/lms-project:${GITHUB_SHA}"
+          docker push "$DOCKERHUB_USERNAME/lms-project:latest"
+          docker push "$DOCKERHUB_USERNAME/lms-project:${GITHUB_SHA}"
+
+  deploy:
+    name: Deploy
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    env:
+      SERVER_IP: ${{ secrets.SERVER_IP }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+      ENV_FILE: ${{ secrets.ENV_FILE }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -T 20 -p "$SSH_PORT" -H "$SERVER_IP" >> ~/.ssh/known_hosts
+
+      - name: Prepare deployment files
+        run: |
+          mkdir -p deploy/nginx
+          cp docker-compose.yml deploy/docker-compose.yml
+          cp nginx/default.conf deploy/nginx/default.conf
+          printf '%s' "$ENV_FILE" > deploy/.env
+          printf '\nDOCKER_IMAGE=%s/lms-project:latest\n' \
+            "$DOCKERHUB_USERNAME" >> deploy/.env
+
+      - name: Upload deployment files
+        run: |
+          ssh -p "$SSH_PORT" -o IPQoS=none \
+            "$SSH_USER@$SERVER_IP" \
+            "mkdir -p '$DEPLOY_DIR/nginx'"
+
+          scp -P "$SSH_PORT" -o IPQoS=none \
+            deploy/docker-compose.yml \
+            "$SSH_USER@$SERVER_IP:$DEPLOY_DIR/docker-compose.yml"
+
+          scp -P "$SSH_PORT" -o IPQoS=none \
+            deploy/nginx/default.conf \
+            "$SSH_USER@$SERVER_IP:$DEPLOY_DIR/nginx/default.conf"
+
+          scp -P "$SSH_PORT" -o IPQoS=none \
+            deploy/.env \
+            "$SSH_USER@$SERVER_IP:$DEPLOY_DIR/.env"
+
+          ssh -p "$SSH_PORT" -o IPQoS=none \
+            "$SSH_USER@$SERVER_IP" \
+            "chmod 600 '$DEPLOY_DIR/.env'"
+
+      - name: Log in to Docker Hub on server
+        run: |
+          printf '%s' "$DOCKERHUB_TOKEN" |
+          ssh -p "$SSH_PORT" -o IPQoS=none \
+            "$SSH_USER@$SERVER_IP" \
+            "docker login -u '$DOCKERHUB_USERNAME' --password-stdin"
+
+      - name: Deploy application
+        run: |
+          ssh -p "$SSH_PORT" -o IPQoS=none \
+            "$SSH_USER@$SERVER_IP" \
+            "cd '$DEPLOY_DIR' &&
+             docker compose pull &&
+             docker compose up -d --no-build --remove-orphans &&
+             docker compose ps"

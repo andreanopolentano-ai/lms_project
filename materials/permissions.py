@@ -2,7 +2,6 @@
 
 from rest_framework.permissions import BasePermission
 
-
 MODERATOR_GROUP_NAME = "Модераторы"
 
 

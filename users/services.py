@@ -1,6 +1,6 @@
 """Сервисные функции для взаимодействия со Stripe."""
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 import stripe
 from django.conf import settings
@@ -57,9 +57,9 @@ def create_stripe_price(
 
     unit_amount = int(
         (
-            payment.amount * Decimal("100")
+            payment.amount * Decimal(100)
         ).quantize(
-            Decimal("1"),
+            Decimal(1),
             rounding=ROUND_HALF_UP,
         )
     )
