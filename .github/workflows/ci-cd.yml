@@ -3,11 +3,11 @@ name: CI/CD
 on:
   push:
     branches:
-      - main
+      - develop
       - feature/ci-cd-deployment
   pull_request:
     branches:
-      - main
+      - develop
   workflow_dispatch:
 
 jobs:
@@ -162,7 +162,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -T 20 -p "$SSH_PORT" -H "$SERVER_IP" >> ~/.ssh/known_hosts
+          touch ~/.ssh/known_hosts
 
       - name: Prepare deployment files
         run: |
@@ -175,36 +175,36 @@ jobs:
 
       - name: Upload deployment files
         run: |
-          ssh -p "$SSH_PORT" -o IPQoS=none \
+          ssh -p "$SSH_PORT" -o IPQoS=none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             "$SSH_USER@$SERVER_IP" \
             "mkdir -p '$DEPLOY_DIR/nginx'"
 
-          scp -P "$SSH_PORT" -o IPQoS=none \
+          scp -P "$SSH_PORT" -o IPQoS=none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             deploy/docker-compose.yml \
             "$SSH_USER@$SERVER_IP:$DEPLOY_DIR/docker-compose.yml"
 
-          scp -P "$SSH_PORT" -o IPQoS=none \
+          scp -P "$SSH_PORT" -o IPQoS=none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             deploy/nginx/default.conf \
             "$SSH_USER@$SERVER_IP:$DEPLOY_DIR/nginx/default.conf"
 
-          scp -P "$SSH_PORT" -o IPQoS=none \
+          scp -P "$SSH_PORT" -o IPQoS=none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             deploy/.env \
             "$SSH_USER@$SERVER_IP:$DEPLOY_DIR/.env"
 
-          ssh -p "$SSH_PORT" -o IPQoS=none \
+          ssh -p "$SSH_PORT" -o IPQoS=none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             "$SSH_USER@$SERVER_IP" \
             "chmod 600 '$DEPLOY_DIR/.env'"
 
       - name: Log in to Docker Hub on server
         run: |
           printf '%s' "$DOCKERHUB_TOKEN" |
-          ssh -p "$SSH_PORT" -o IPQoS=none \
+          ssh -p "$SSH_PORT" -o IPQoS=none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             "$SSH_USER@$SERVER_IP" \
             "docker login -u '$DOCKERHUB_USERNAME' --password-stdin"
 
       - name: Deploy application
         run: |
-          ssh -p "$SSH_PORT" -o IPQoS=none \
+          ssh -p "$SSH_PORT" -o IPQoS=none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             "$SSH_USER@$SERVER_IP" \
             "cd '$DEPLOY_DIR' &&
              docker compose pull &&
