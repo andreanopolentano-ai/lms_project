@@ -1,5 +1,6 @@
 """Контроллеры приложения users."""
 
+import stripe
 from django.core.exceptions import ImproperlyConfigured
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -11,7 +12,6 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
-import stripe
 
 from users.models import Payment, Subscription, User
 from users.permissions import IsSelf
