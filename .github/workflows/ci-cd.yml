@@ -1,0 +1,253 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - develop
+      - feature/ci-cd-deployment
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lms-cicd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: lms_test
+          POSTGRES_USER: lms
+          POSTGRES_PASSWORD: lms_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lms -d lms_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      SECRET_KEY: ci-secret-key
+      DEBUG: "False"
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      DB_ENGINE: postgresql
+      POSTGRES_DB: lms_test
+      POSTGRES_USER: lms
+      POSTGRES_PASSWORD: lms_password
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+      CELERY_BROKER_URL: redis://127.0.0.1:6379/0
+      CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/0
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Poetry and dependencies
+        run: |
+          python -m pip install --upgrade pip poetry
+          poetry config virtualenvs.create false
+          poetry install --with dev --no-interaction --no-root
+
+      - name: Run Django checks
+        run: poetry run python manage.py check
+
+      - name: Check migrations
+        run: poetry run python manage.py makemigrations --check --dry-run
+
+      - name: Run tests
+        run: poetry run python manage.py test
+
+  lint:
+    name: Lint
+    needs: tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Poetry and dependencies
+        run: |
+          python -m pip install --upgrade pip poetry
+          poetry config virtualenvs.create false
+          poetry install --with dev --no-interaction --no-root
+
+      - name: Run Ruff
+        run: poetry run ruff check . --exclude .venv,.idea,migrations
+
+  build:
+    name: Build
+    needs: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Check Docker Hub secrets
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          test -n "$DOCKERHUB_USERNAME" || {
+            echo "::error::DOCKERHUB_USERNAME secret is empty"
+            exit 1
+          }
+          test -n "$DOCKERHUB_TOKEN" || {
+            echo "::error::DOCKERHUB_TOKEN secret is empty"
+            exit 1
+          }
+
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          printf '%s' "$DOCKERHUB_TOKEN" |
+          docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+      - name: Build and push Docker image
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          IMAGE="$DOCKERHUB_USERNAME/lms-project"
+          docker build \
+            --build-arg APP_VERSION="$GITHUB_SHA" \
+            -t "$IMAGE:latest" \
+            -t "$IMAGE:$GITHUB_SHA" \
+            .
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:$GITHUB_SHA"
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    env:
+      SERVER_IP: ${{ secrets.SERVER_IP }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+      ENV_FILE: ${{ secrets.ENV_FILE }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Deploy and verify application
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          : "${SERVER_IP:?SERVER_IP secret is empty}"
+          : "${DOCKERHUB_USERNAME:?DOCKERHUB_USERNAME secret is empty}"
+
+          SSH_PORT="${SSH_PORT:-2222}"
+          SSH_USER="${SSH_USER:-deploy}"
+          DEPLOY_DIR="${DEPLOY_DIR:-/opt/lms}"
+
+          # Сначала пробуем обычный SSH-деплой с уже сохранёнными секретами.
+          # Если GitHub-hosted runner блокируется сервером, контейнер auto_deploy
+          # самостоятельно заберёт тот же образ из Docker Hub.
+          if [[ -n "${SSH_PRIVATE_KEY:-}" && -n "${ENV_FILE:-}" ]]; then
+            mkdir -p ~/.ssh deploy/nginx
+            printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+
+            cp docker-compose.yml deploy/docker-compose.yml
+            cp nginx/default.conf deploy/nginx/default.conf
+            printf '%s\n' "$ENV_FILE" > deploy/.env
+            printf '\nDOCKER_IMAGE=%s/lms-project:latest\n' \
+              "$DOCKERHUB_USERNAME" >> deploy/.env
+
+            SSH_OPTIONS=(
+              -i ~/.ssh/deploy_key
+              -p "$SSH_PORT"
+              -o BatchMode=yes
+              -o IdentitiesOnly=yes
+              -o IPQoS=none
+              -o StrictHostKeyChecking=no
+              -o UserKnownHostsFile=/dev/null
+              -o ConnectTimeout=15
+            )
+            SCP_OPTIONS=(
+              -i ~/.ssh/deploy_key
+              -P "$SSH_PORT"
+              -o BatchMode=yes
+              -o IdentitiesOnly=yes
+              -o IPQoS=none
+              -o StrictHostKeyChecking=no
+              -o UserKnownHostsFile=/dev/null
+              -o ConnectTimeout=15
+            )
+
+            if timeout 25 ssh "${SSH_OPTIONS[@]}" \
+              "$SSH_USER@$SERVER_IP" \
+              "mkdir -p '$DEPLOY_DIR/nginx'"; then
+              timeout 30 scp "${SCP_OPTIONS[@]}" \
+                deploy/docker-compose.yml \
+                "$SSH_USER@$SERVER_IP:$DEPLOY_DIR/docker-compose.yml"
+              timeout 30 scp "${SCP_OPTIONS[@]}" \
+                deploy/nginx/default.conf \
+                "$SSH_USER@$SERVER_IP:$DEPLOY_DIR/nginx/default.conf"
+              timeout 30 scp "${SCP_OPTIONS[@]}" \
+                deploy/.env \
+                "$SSH_USER@$SERVER_IP:$DEPLOY_DIR/.env"
+              timeout 60 ssh "${SSH_OPTIONS[@]}" \
+                "$SSH_USER@$SERVER_IP" \
+                "set -e; cd '$DEPLOY_DIR'; docker compose pull; docker compose up -d --no-build --remove-orphans"
+            else
+              echo "::warning::Прямой SSH недоступен. Ожидаем серверное автообновление."
+            fi
+          fi
+
+          HEALTH_URL="http://$SERVER_IP/health/"
+          echo "Waiting for $HEALTH_URL to report version $GITHUB_SHA"
+
+          for attempt in $(seq 1 54); do
+            response="$(curl -fsS --max-time 10 "$HEALTH_URL" 2>/dev/null || true)"
+            echo "Attempt $attempt: ${response:-no response}"
+
+            if [[ "$response" == *"$GITHUB_SHA"* ]]; then
+              echo "Deployment completed successfully."
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "::error::Server did not start image version $GITHUB_SHA"
+          exit 1

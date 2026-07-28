@@ -30,6 +30,10 @@ class Course(models.Model):
         null=True,
         verbose_name="Владелец",
     )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Дата обновления",
+    )
 
     class Meta:
         verbose_name = "курс"
@@ -37,6 +41,7 @@ class Course(models.Model):
 
     def __str__(self) -> str:
         """Возвращает строковое представление курса."""
+
         return self.title
 
 
@@ -85,4 +90,5 @@ class Lesson(models.Model):
 
     def __str__(self) -> str:
         """Возвращает строковое представление урока."""
+
         return self.title

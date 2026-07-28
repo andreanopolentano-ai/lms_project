@@ -4,7 +4,6 @@ from urllib.parse import urlparse
 
 from rest_framework import serializers
 
-
 ALLOWED_VIDEO_DOMAIN = "youtube.com"
 
 

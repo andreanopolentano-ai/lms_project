@@ -1,7 +1,26 @@
-
 .venv/
+.idea/
+.vscode/
 
 __pycache__/
 *.py[cod]
+
+.env
+.env.local.backup
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
 .coverage
+coverage.txt
 htmlcov/
+.pytest_cache/
+.ruff_cache/
+
+db.sqlite3
+celerybeat-schedule*
+celerybeat.pid
+
+staticfiles/
+media/

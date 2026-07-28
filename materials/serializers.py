@@ -48,10 +48,12 @@ class CourseSerializer(serializers.ModelSerializer):
             "preview",
             "description",
             "owner",
+            "updated_at",
             "lessons_count",
             "lessons",
             "is_subscribed",
         )
+        read_only_fields = ("updated_at",)
 
     def get_lessons_count(self, obj: Course) -> int:
         """Возвращает количество уроков курса."""
