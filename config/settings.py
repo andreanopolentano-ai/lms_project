@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-load_dotenv(BASE_DIR / ".env", override=True)
+load_dotenv(BASE_DIR / ".env", override=False)
 
 SECRET_KEY = os.getenv(
     "SECRET_KEY",
@@ -33,6 +33,17 @@ ALLOWED_HOSTS = [
     ).split(",")
     if host.strip()
 ]
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CSRF_TRUSTED_ORIGINS",
+        "",
+    ).split(",")
+    if origin.strip()
+]
+
+APP_VERSION = os.getenv("APP_VERSION", "local")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -168,7 +179,10 @@ SPECTACULAR_SETTINGS = {
     },
 }
 
-STRIPE_API_KEY = os.getenv("STRIPE_API_KEY", "")
+STRIPE_API_KEY = (
+    os.getenv("STRIPE_API_KEY")
+    or os.getenv("STRIPE_SECRET_KEY", "")
+)
 STRIPE_CURRENCY = os.getenv("STRIPE_CURRENCY", "rub")
 STRIPE_SUCCESS_URL = os.getenv(
     "STRIPE_SUCCESS_URL",
@@ -211,3 +225,5 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=0, minute=0),
     },
 }
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

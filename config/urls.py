@@ -1,9 +1,11 @@
-﻿"""Главные маршруты проекта."""
+"""Главные маршруты проекта."""
 
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
+from django.views.generic import RedirectView
+from config.health import health_check
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -15,6 +17,15 @@ from rest_framework_simplejwt.views import (
 )
 
 urlpatterns = [
+    path("health/", health_check, name="health"),
+    path(
+        "",
+        RedirectView.as_view(
+            pattern_name="swagger-ui",
+            permanent=False,
+        ),
+        name="home",
+    ),
     path("admin/", admin.site.urls),
 
     path(

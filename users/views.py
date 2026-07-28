@@ -11,7 +11,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
-from stripe import StripeError
+import stripe
 
 from users.models import Payment, Subscription, User
 from users.permissions import IsSelf
@@ -272,7 +272,7 @@ class PaymentCreateAPIView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        except StripeError as error:
+        except stripe.StripeError as error:
             payment.payment_status = "error"
             payment.session_status = "error"
             payment.save(
@@ -377,7 +377,7 @@ class PaymentStatusAPIView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        except StripeError as error:
+        except stripe.StripeError as error:
             return Response(
                 {
                     "detail": (
