@@ -34,13 +34,16 @@ services:
       args:
         APP_VERSION: ${APP_VERSION:-local}
     restart: unless-stopped
-    command: >
-      sh -c "python manage.py migrate &&
-             python manage.py collectstatic --noinput &&
-             gunicorn config.wsgi:application
-             --bind 0.0.0.0:8000
-             --workers 3
-             --timeout 120"
+    command:
+      - sh
+      - -c
+      - >
+        python manage.py migrate &&
+        python manage.py collectstatic --noinput &&
+        exec gunicorn config.wsgi:application
+        --bind 0.0.0.0:8000
+        --workers 3
+        --timeout 120
     env_file:
       - .env
     expose:
@@ -56,13 +59,11 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - >-
-          python -c "import urllib.request;
-          urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=5)"
-      interval: 10s
+        - python -c "import socket; socket.create_connection(('127.0.0.1', 8000), 5).close()"
+      interval: 5s
       timeout: 5s
-      retries: 12
-      start_period: 30s
+      retries: 20
+      start_period: 20s
 
   celery_worker:
     image: ${DOCKER_IMAGE:-lms-project:latest}
@@ -126,8 +127,7 @@ services:
       - |
         while true; do
           docker pull --quiet "$$DOCKER_IMAGE"
-          docker compose --profile production up -d --no-build \
-            db redis web celery_worker celery_beat nginx
+          docker compose --profile production up -d --no-build             db redis web celery_worker celery_beat nginx
           sleep 300
         done
 
